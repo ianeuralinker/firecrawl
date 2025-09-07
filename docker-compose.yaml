@@ -1,46 +1,87 @@
+name: firecrawl
+
+networks:
+  backend:
+    driver: bridge
+
 services:
+  redis:
+    image: redis:alpine
+    command: redis-server --bind 0.0.0.0
+    networks: [backend]
+
   playwright-service:
-    build: apps/playwright-service-ts
+    image: ghcr.io/firecrawl/playwright-service:latest
     environment:
       PORT: 3000
+      BLOCK_MEDIA: ${BLOCK_MEDIA:-true}
       PROXY_SERVER: ${PROXY_SERVER}
       PROXY_USERNAME: ${PROXY_USERNAME}
       PROXY_PASSWORD: ${PROXY_PASSWORD}
-      BLOCK_MEDIA: ${BLOCK_MEDIA}
-    networks:
-      - backend
+    networks: [backend]
 
   api:
-    <<: *common-service
+    image: ghcr.io/firecrawl/firecrawl:latest
     environment:
-      <<: *common-env
       HOST: "0.0.0.0"
-      # fixar explicitamente a porta interna do app
       PORT: 3002
       ENV: local
       USE_DB_AUTHENTICATION: "false"
-      # garantir caminho correto do Playwright:
+
+      # Redis
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      REDIS_RATE_LIMIT_URL: ${REDIS_RATE_LIMIT_URL:-redis://redis:6379}
+
+      # Playwright -> use a rota /scrape no serviço interno
       PLAYWRIGHT_MICROSERVICE_URL: ${PLAYWRIGHT_MICROSERVICE_URL:-http://playwright-service:3000/scrape}
+
+      # Logs
+      LOGGING_LEVEL: ${LOGGING_LEVEL:-INFO}
+
+      # (Opcional) Provedor de IA e integrações
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL}
+      MODEL_NAME: ${MODEL_NAME}
+      MODEL_EMBEDDING_NAME: ${MODEL_EMBEDDING_NAME}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
+      SERPER_API_KEY: ${SERPER_API_KEY}
+      SEARCHAPI_API_KEY: ${SEARCHAPI_API_KEY}
+      SEARXNG_ENDPOINT: ${SEARXNG_ENDPOINT}
+      SEARXNG_ENGINES: ${SEARXNG_ENGINES}
+      SEARXNG_CATEGORIES: ${SEARXNG_CATEGORIES}
+      SELF_HOSTED_WEBHOOK_URL: ${SELF_HOSTED_WEBHOOK_URL}
+      POSTHOG_API_KEY: ${POSTHOG_API_KEY}
+      POSTHOG_HOST: ${POSTHOG_HOST}
+      BULL_AUTH_KEY: ${BULL_AUTH_KEY}
+      TEST_API_KEY: ${TEST_API_KEY}
+
+      # (Se quiser desligar tudo que é auth de DB no OSS)
+      SUPABASE_ANON_TOKEN: ${SUPABASE_ANON_TOKEN}
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_SERVICE_TOKEN: ${SUPABASE_SERVICE_TOKEN}
     depends_on:
       - redis
       - playwright-service
-    # REMOVIDO: nada de "ports:" aqui; Traefik publica via domínio
+    networks: [backend]
 
   worker:
-    <<: *common-service
+    image: ghcr.io/firecrawl/firecrawl:latest
     environment:
-      <<: *common-env
+      HOST: "0.0.0.0"
       ENV: local
       USE_DB_AUTHENTICATION: "false"
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      REDIS_RATE_LIMIT_URL: ${REDIS_RATE_LIMIT_URL:-redis://redis:6379}
       PLAYWRIGHT_MICROSERVICE_URL: ${PLAYWRIGHT_MICROSERVICE_URL:-http://playwright-service:3000/scrape}
+      LOGGING_LEVEL: ${LOGGING_LEVEL:-INFO}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL}
+      MODEL_NAME: ${MODEL_NAME}
+      MODEL_EMBEDDING_NAME: ${MODEL_EMBEDDING_NAME}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
     depends_on:
       - redis
       - playwright-service
       - api
-    command: [ "pnpm", "run", "workers" ]
-
-  redis:
-    image: redis:alpine
-    networks:
-      - backend
-    command: redis-server --bind 0.0.0.0
+    command: [ "node", "dist/src/services/queue-worker.js" ]
+    networks: [backend]
