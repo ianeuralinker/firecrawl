@@ -13,7 +13,7 @@ services:
   playwright-service:
     image: ghcr.io/firecrawl/playwright-service:latest
     environment:
-      PORT: 3000
+      PORT: 3002
       BLOCK_MEDIA: ${BLOCK_MEDIA:-true}
       PROXY_SERVER: ${PROXY_SERVER}
       PROXY_USERNAME: ${PROXY_USERNAME}
