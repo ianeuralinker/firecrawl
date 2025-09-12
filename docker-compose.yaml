@@ -20,13 +20,19 @@ services:
       PROXY_PASSWORD: ${PROXY_PASSWORD}
     networks: [backend]
 
-  api:
+    api:
     image: ghcr.io/firecrawl/firecrawl:latest
     environment:
       HOST: "0.0.0.0"
       PORT: 3002
-      ENV: local
-      USE_DB_AUTHENTICATION: "false"
+      ...
+    depends_on:
+      - redis
+      - playwright-service
+    networks: [backend]
+    ports:
+      - "3002:3002"
+
 
       # Redis
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
